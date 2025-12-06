@@ -13,7 +13,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourname.agos",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Agos needs your location to show nearby water level gauges and help you monitor water conditions in your area.",
+        "NSLocationAlwaysUsageDescription": "Agos needs your location to provide alerts about nearby water level changes."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,10 +26,23 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Agos needs your location to show nearby water level gauges and help you monitor water conditions in your area."
+        }
+      ],
+      "expo-router"
+    ]
   }
 }
