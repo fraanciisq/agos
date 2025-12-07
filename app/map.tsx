@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
-import MapView from 'react-native-maps';
+import { StyleSheet, View, Text, ActivityIndicator, TouchableOpacity, Dimensions, Alert } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { supabase, WaterGauge } from '../lib/supabase';
 
 const { width } = Dimensions.get('window');
 
@@ -10,9 +11,35 @@ export default function MapScreen() {
   const router = useRouter();
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [loading, setLoading] = useState(true);
+  const [gauges, setGauges] = useState<WaterGauge[]>([]);
+
+  // Fetch gauges from database
+  const fetchGauges = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('water_gauges')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching gauges:', error);
+        Alert.alert('Error', 'Failed to load water gauges');
+        return;
+      }
+
+      if (data) {
+        setGauges(data);
+        console.log('Loaded', data.length, 'gauges from database');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      Alert.alert('Error', 'Failed to connect to database');
+    }
+  };
 
   useEffect(() => {
     (async () => {
+      // Get location permission
       let { status } = await Location.requestForegroundPermissionsAsync();
       console.log('Location permission:', status);
       
@@ -25,9 +52,34 @@ export default function MapScreen() {
       let location = await Location.getCurrentPositionAsync({});
       console.log('Got location:', location.coords);
       setLocation(location);
+
+      // Fetch gauges from database
+      await fetchGauges();
+      
       setLoading(false);
     })();
   }, []);
+
+  // Refresh data when screen comes back into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchGauges();
+    }, [])
+  );
+
+  // Get marker color based on status
+  const getMarkerColor = (status: string) => {
+    switch (status) {
+      case 'normal':
+        return '#10b981'; // green
+      case 'warning':
+        return '#f59e0b'; // orange
+      case 'critical':
+        return '#ef4444'; // red
+      default:
+        return '#6b7280'; // gray
+    }
+  };
 
   if (loading) {
     return (
@@ -79,7 +131,21 @@ export default function MapScreen() {
         initialRegion={initialRegion}
         showsUserLocation={true}
         showsMyLocationButton={false}
-      />
+      >
+        {/* Render markers from database */}
+        {gauges.map((gauge) => (
+          <Marker
+            key={gauge.id}
+            coordinate={{
+              latitude: gauge.latitude,
+              longitude: gauge.longitude,
+            }}
+            title={gauge.name}
+            description={`${gauge.water_level}m / ${gauge.max_capacity}m`}
+            pinColor={getMarkerColor(gauge.status)}
+          />
+        ))}
+      </MapView>
 
       {/* Floating Info Card */}
       <View style={styles.infoCard}>
@@ -95,16 +161,24 @@ export default function MapScreen() {
         <Text style={styles.fabIcon}>📍</Text>
       </TouchableOpacity>
 
+      {/* Floating Action Button - Add Device */}
+      <TouchableOpacity 
+        style={styles.fabAdd}
+        onPress={() => router.push('/add-device')}
+      >
+        <Text style={styles.fabAddIcon}>+</Text>
+      </TouchableOpacity>
+
       {/* Status Bar at Bottom */}
       <View style={styles.statusBar}>
         <View style={styles.statusItem}>
           <View style={[styles.statusDot, { backgroundColor: '#10b981' }]} />
-          <Text style={styles.statusText}>All Systems Normal</Text>
+          <Text style={styles.statusText}>Database Connected</Text>
         </View>
         <View style={styles.statusDivider} />
         <View style={styles.statusItem}>
           <Text style={styles.statusEmoji}>💧</Text>
-          <Text style={styles.statusText}>4 Sensors Active</Text>
+          <Text style={styles.statusText}>{gauges.length} Sensors Active</Text>
         </View>
       </View>
     </View>
@@ -270,6 +344,27 @@ const styles = StyleSheet.create({
   },
   fabIcon: {
     fontSize: 24,
+  },
+  fabAdd: {
+    position: 'absolute',
+    right: 20,
+    bottom: 170,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#10b981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  fabAddIcon: {
+    fontSize: 32,
+    color: '#ffffff',
+    fontWeight: '700',
   },
   statusBar: {
     position: 'absolute',
